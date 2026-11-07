@@ -240,7 +240,6 @@ export const GameUI: React.FC<GameUIProps> = ({
                 </span>
               )}
             </div>
-
             <div className="flex items-center gap-3 text-xs tracking-wider text-slate-300 font-rajdhani">
               <span className="flex items-center gap-1">
                 <Trophy className="h-3.5 w-3.5 text-amber-300" /> {highScore}
@@ -256,7 +255,6 @@ export const GameUI: React.FC<GameUIProps> = ({
             </div>
           </div>
         )}
-
         {/* If in Menu, show high score */}
         {gameState === 'MENU' && (
           <div className="flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/60 px-3.5 py-1.5 backdrop-blur-md shadow-[0_0_15px_rgba(255,255,255,0.03)]">
@@ -318,11 +316,10 @@ export const GameUI: React.FC<GameUIProps> = ({
               {[1, 2, 3, 4, 5].map((step) => (
                 <span
                   key={step}
-                  className={`h-2 w-2 rounded-full transition-all duration-200 ${
-                    step <= warpData.hop
+                  className={`h-2 w-2 rounded-full transition-all duration-200 ${step <= warpData.hop
                       ? 'bg-cyan-300 shadow-[0_0_8px_#89c2d9] scale-125'
                       : 'bg-slate-700'
-                  }`}
+                    }`}
                 />
               ))}
             </div>
@@ -446,14 +443,12 @@ export const GameUI: React.FC<GameUIProps> = ({
                 <button
                   type="button"
                   onClick={toggleSound}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                    soundEnabled ? 'bg-cyan-500' : 'bg-slate-700'
-                  }`}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${soundEnabled ? 'bg-cyan-500' : 'bg-slate-700'
+                    }`}
                 >
                   <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      soundEnabled ? 'translate-x-6' : 'translate-x-1'
-                    }`}
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${soundEnabled ? 'translate-x-6' : 'translate-x-1'
+                      }`}
                   />
                 </button>
               </div>
@@ -474,14 +469,12 @@ export const GameUI: React.FC<GameUIProps> = ({
                 <button
                   type="button"
                   onClick={toggleHaptics}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                    hapticsEnabled ? 'bg-cyan-500' : 'bg-slate-700'
-                  }`}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${hapticsEnabled ? 'bg-cyan-500' : 'bg-slate-700'
+                    }`}
                 >
                   <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      hapticsEnabled ? 'translate-x-6' : 'translate-x-1'
-                    }`}
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${hapticsEnabled ? 'translate-x-6' : 'translate-x-1'
+                      }`}
                   />
                 </button>
               </div>
