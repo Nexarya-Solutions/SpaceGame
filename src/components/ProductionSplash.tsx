@@ -141,3 +141,4 @@ export const ProductionSplash: React.FC<ProductionSplashProps> = ({ onComplete }
     </div>
   );
 };
+

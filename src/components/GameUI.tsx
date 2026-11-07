@@ -658,17 +658,6 @@ export const GameUI: React.FC<GameUIProps> = ({
       {showSplash && (
         <ProductionSplash onComplete={handleSplashComplete} />
       )}
-
-      {/* Bottom Hint during active gameplay */}
-      {gameState === 'PLAYING' && !isSettingsOpen && !isStoryOpen && !showSplash && (
-        <footer className="flex w-full justify-center pb-2">
-          <div className="rounded-full border border-white/10 bg-black/40 px-4 py-1 backdrop-blur-md">
-            <span className="font-rajdhani text-xs tracking-wider text-slate-400">
-              TAP SCREEN OR PRESS SPACE TO LAUNCH
-            </span>
-          </div>
-        </footer>
-      )}
     </div>
   );
 };
