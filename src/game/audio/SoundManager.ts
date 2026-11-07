@@ -227,6 +227,38 @@ export class SoundManager {
     }
   }
 
+  public static playIntroSplashChord(): void {
+    if (!StorageManager.isSoundEnabled() || !this.ctx || !this.masterGain) return;
+    this.resume();
+
+    try {
+      const now = this.ctx.currentTime;
+      // Majestic celestial chord (D4, A4, F#5, A5)
+      const freqs = [293.66, 440.00, 739.99, 880.00];
+      freqs.forEach((freq, idx) => {
+        if (!this.ctx || !this.masterGain) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        const startTime = now + idx * 0.04;
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, startTime);
+
+        gain.gain.setValueAtTime(0.001, startTime);
+        gain.gain.linearRampToValueAtTime(0.18, startTime + 0.08);
+        gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 1.2);
+
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+
+        osc.start(startTime);
+        osc.stop(startTime + 1.25);
+      });
+    } catch {
+      // Audio fallback
+    }
+  }
+
   public static playPickup(type: 'MULTIPLIER' | 'WARP'): void {
     if (!StorageManager.isSoundEnabled() || !this.ctx || !this.masterGain) return;
     this.resume();

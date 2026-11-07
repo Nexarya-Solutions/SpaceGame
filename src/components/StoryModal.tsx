@@ -1,5 +1,6 @@
 import React from 'react';
 import { Play, ArrowLeft, Sparkles, Compass, ShieldAlert } from 'lucide-react';
+import shivoroLogo from '../assets/shivoro-games-cropped.png';
 
 interface StoryModalProps {
   isOpen: boolean;
@@ -150,6 +151,14 @@ export const StoryModal: React.FC<StoryModalProps> = ({
               <span>BACK TO SETTINGS</span>
             </button>
           )}
+        </div>
+
+        {/* Production Credit */}
+        <div className="mt-3 flex items-center justify-center gap-2 pt-2 border-t border-white/5 opacity-80">
+          <img src={shivoroLogo} alt="Shivoro Games" className="h-4 w-4 rounded-sm object-contain" />
+          <span className="font-orbitron text-[9px] tracking-widest text-slate-400 uppercase">
+            A Shivoro Games Production
+          </span>
         </div>
       </div>
     </div>

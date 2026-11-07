@@ -11,6 +11,8 @@ import {
 import { StorageManager } from '../game/services/StorageManager';
 import { SoundManager } from '../game/audio/SoundManager';
 import { StoryModal } from './StoryModal';
+import { ProductionSplash } from './ProductionSplash';
+import shivoroLogo from '../assets/shivoro-games-cropped.png';
 import {
   Volume2,
   VolumeX,
@@ -58,6 +60,9 @@ export const GameUI: React.FC<GameUIProps> = ({
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [hapticsEnabled, setHapticsEnabled] = useState<boolean>(true);
 
+  // Production Company Splash Screen State
+  const [showSplash, setShowSplash] = useState<boolean>(true);
+
   // Story Onboarding & Lore Modal State
   const [isStoryOpen, setIsStoryOpen] = useState<boolean>(false);
   const [storyMode, setStoryMode] = useState<'FIRST_LAUNCH' | 'SETTINGS'>('FIRST_LAUNCH');
@@ -75,21 +80,17 @@ export const GameUI: React.FC<GameUIProps> = ({
   });
 
   useEffect(() => {
-    // Synchronize Storage and check for first-launch intro story
-    const syncStorageAndCheckFirstLaunch = async () => {
+    // Keep engine paused on initial load while splash plays
+    onPause();
+
+    // Synchronize Storage
+    const syncStorage = async () => {
       await StorageManager.init();
       setHighScore(StorageManager.getHighScore());
       setSoundEnabled(StorageManager.isSoundEnabled());
       setHapticsEnabled(StorageManager.isHapticsEnabled());
-
-      // If user has not seen intro story, open story onboarding modal immediately
-      if (!StorageManager.hasSeenIntroStory()) {
-        setIsStoryOpen(true);
-        setStoryMode('FIRST_LAUNCH');
-        onPause();
-      }
     };
-    syncStorageAndCheckFirstLaunch();
+    syncStorage();
 
     const offState = gameEvents.on<GameState>(GAME_EVENTS.STATE_CHANGE, (state) => {
       setGameState(state);
@@ -133,12 +134,24 @@ export const GameUI: React.FC<GameUIProps> = ({
     };
   }, [onPause]);
 
+  const handleSplashComplete = useCallback(() => {
+    setShowSplash(false);
+    // After splash completes, check if user needs first-launch intro story
+    if (!StorageManager.hasSeenIntroStory()) {
+      setIsStoryOpen(true);
+      setStoryMode('FIRST_LAUNCH');
+      onPause();
+    } else {
+      onResume();
+    }
+  }, [onPause, onResume]);
+
   const openSettings = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isStoryOpen) return;
+    if (isStoryOpen || showSplash) return;
     setIsSettingsOpen(true);
     onPause();
-  }, [isStoryOpen, onPause]);
+  }, [isStoryOpen, showSplash, onPause]);
 
   const closeSettings = useCallback((e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -195,7 +208,7 @@ export const GameUI: React.FC<GameUIProps> = ({
 
   const handleStartClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isSettingsOpen || isStoryOpen) return;
+    if (isSettingsOpen || isStoryOpen || showSplash) return;
     onStart();
   };
 
@@ -266,7 +279,7 @@ export const GameUI: React.FC<GameUIProps> = ({
         )}
 
         {/* Settings Icon Button (Pinned Top-Right) */}
-        {!isStoryOpen && (
+        {!isStoryOpen && !showSplash && (
           <div className="pointer-events-auto flex items-center gap-2">
             <button
               onClick={openSettings}
@@ -338,11 +351,11 @@ export const GameUI: React.FC<GameUIProps> = ({
       </div>
 
       {/* Main Menu Overlay (Centered on Mobile & Desktop) */}
-      {gameState === 'MENU' && !isSettingsOpen && !isStoryOpen && (
+      {gameState === 'MENU' && !isSettingsOpen && !isStoryOpen && !showSplash && (
         <div className="pointer-events-auto my-auto flex w-full flex-col items-center justify-center px-4 py-4 text-center">
           <div className="relative w-full max-w-sm rounded-3xl border border-white/15 bg-slate-950/80 p-6 sm:p-7 shadow-[0_0_50px_rgba(255,255,255,0.06)] backdrop-blur-xl">
             {/* Comet Symbol Badge: Polished Single Red Dot with Specular Sheen (No Blinking) */}
-            <div className="relative mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 via-slate-900/80 to-slate-950 p-2 shadow-[0_0_25px_rgba(255,255,255,0.05)]">
+            <div className="relative mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 via-slate-900/80 to-slate-950 p-2 shadow-[0_0_25px_rgba(255,255,255,0.05)]">
               {/* Outer soft ambient glow */}
               <div className="h-10 w-10 rounded-full bg-red-600/20 flex items-center justify-center">
                 {/* Clean, solid single red dot */}
@@ -351,6 +364,14 @@ export const GameUI: React.FC<GameUIProps> = ({
                   <span className="absolute top-1 left-1 h-2 w-2 rounded-full bg-white/90" />
                 </div>
               </div>
+            </div>
+
+            {/* Shivoro Games Production Credit */}
+            <div className="mb-2 flex items-center justify-center gap-1.5 opacity-90">
+              <img src={shivoroLogo} alt="Shivoro Games" className="h-4 w-4 rounded-sm object-contain" />
+              <span className="font-orbitron text-[9px] tracking-[0.25em] text-amber-300 font-bold uppercase">
+                SHIVORO GAMES
+              </span>
             </div>
 
             {/* Game Title */}
@@ -497,6 +518,28 @@ export const GameUI: React.FC<GameUIProps> = ({
                 <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-white transition-colors" />
               </button>
 
+              {/* Studio Intro Replay Row */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSettingsOpen(false);
+                  setShowSplash(true);
+                  onPause();
+                }}
+                className="group flex w-full items-center justify-between rounded-2xl border border-white/10 bg-white/5 p-3.5 text-left transition-all hover:bg-white/10 hover:border-white/20 active:scale-[0.98]"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-400/20 text-amber-300 border border-amber-400/30 overflow-hidden">
+                    <img src={shivoroLogo} alt="Shivoro Games" className="h-6 w-6 object-contain" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-white">Shivoro Games</p>
+                    <p className="text-xs text-slate-400">Replay Production Intro</p>
+                  </div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-white transition-colors" />
+              </button>
+
               {/* Game Version Display */}
               <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 p-3.5 text-xs">
                 <span className="text-slate-400">Game Build Version</span>
@@ -530,7 +573,7 @@ export const GameUI: React.FC<GameUIProps> = ({
       )}
 
       {/* Game Over Modal Overlay */}
-      {gameState === 'GAMEOVER' && gameOverData && !isSettingsOpen && !isStoryOpen && (
+      {gameState === 'GAMEOVER' && gameOverData && !isSettingsOpen && !isStoryOpen && !showSplash && (
         <div className="pointer-events-auto fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-6 backdrop-blur-md">
           <div className="relative w-full max-w-sm rounded-3xl border border-white/15 bg-gradient-to-b from-slate-900/90 via-slate-950/95 to-black p-6 shadow-[0_0_50px_rgba(0,0,0,0.8)]">
             {/* Header / Reason */}
@@ -611,8 +654,13 @@ export const GameUI: React.FC<GameUIProps> = ({
         onBackToSettings={handleBackToSettings}
       />
 
+      {/* Production Company Intro Splash Screen */}
+      {showSplash && (
+        <ProductionSplash onComplete={handleSplashComplete} />
+      )}
+
       {/* Bottom Hint during active gameplay */}
-      {gameState === 'PLAYING' && !isSettingsOpen && !isStoryOpen && (
+      {gameState === 'PLAYING' && !isSettingsOpen && !isStoryOpen && !showSplash && (
         <footer className="flex w-full justify-center pb-2">
           <div className="rounded-full border border-white/10 bg-black/40 px-4 py-1 backdrop-blur-md">
             <span className="font-rajdhani text-xs tracking-wider text-slate-400">
