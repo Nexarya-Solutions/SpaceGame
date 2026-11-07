@@ -69,17 +69,15 @@ export const ProductionSplash: React.FC<ProductionSplashProps> = ({ onComplete }
     <div
       onClick={handleSkip}
       onTouchStart={handleSkip}
-      className={`pointer-events-auto fixed inset-0 z-50 flex flex-col items-center justify-between p-6 bg-[#070a14] select-none cursor-pointer transition-opacity duration-500 ease-out ${
-        phase === 'ENTER' ? 'opacity-0' : phase === 'ACTIVE' ? 'opacity-100' : 'opacity-0'
-      }`}
+      className={`pointer-events-auto fixed inset-0 z-50 flex flex-col items-center justify-between p-6 bg-[#070a14] select-none cursor-pointer transition-opacity duration-500 ease-out ${phase === 'ENTER' ? 'opacity-0' : phase === 'ACTIVE' ? 'opacity-100' : 'opacity-0'
+        }`}
     >
       {/* Ambient Celestial Glows */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden flex items-center justify-center">
         {/* Soft Golden Radiant Aura */}
         <div
-          className={`h-80 w-80 sm:h-96 sm:w-96 rounded-full bg-gradient-to-tr from-amber-500/25 via-yellow-500/15 to-transparent blur-[110px] transition-all duration-1000 ${
-            phase === 'ACTIVE' ? 'scale-110 opacity-100' : 'scale-90 opacity-40'
-          }`}
+          className={`h-80 w-80 sm:h-96 sm:w-96 rounded-full bg-gradient-to-tr from-amber-500/25 via-yellow-500/15 to-transparent blur-[110px] transition-all duration-1000 ${phase === 'ACTIVE' ? 'scale-110 opacity-100' : 'scale-90 opacity-40'
+            }`}
         />
         {/* Subtle Starlight Depth */}
         <div className="absolute h-48 w-48 rounded-full bg-sky-400/10 blur-[80px]" />
@@ -90,9 +88,8 @@ export const ProductionSplash: React.FC<ProductionSplashProps> = ({ onComplete }
 
       {/* Center Production Logo Presentation */}
       <div
-        className={`relative z-10 flex flex-col items-center text-center transition-all duration-700 ease-out ${
-          phase === 'ACTIVE' ? 'scale-100 translate-y-0 opacity-100' : 'scale-95 translate-y-2 opacity-0'
-        }`}
+        className={`relative z-10 flex flex-col items-center text-center transition-all duration-700 ease-out ${phase === 'ACTIVE' ? 'scale-100 translate-y-0 opacity-100' : 'scale-95 translate-y-2 opacity-0'
+          }`}
       >
         {/* Metallic Golden Halo Card Container */}
         <div className="relative mb-6 flex items-center justify-center">
@@ -135,7 +132,6 @@ export const ProductionSplash: React.FC<ProductionSplashProps> = ({ onComplete }
       {/* Bottom Skip Indicator */}
       <div className="relative z-10 flex flex-col items-center pb-3">
         <span className="font-rajdhani text-xs tracking-widest text-slate-500 uppercase transition-opacity duration-300 hover:text-slate-300">
-          TAP ANYWHERE TO SKIP
         </span>
       </div>
     </div>
