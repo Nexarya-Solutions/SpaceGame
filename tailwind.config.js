@@ -19,7 +19,12 @@ export default {
         }
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        game: ['"Lilita One"', 'Fredoka', 'cursive', 'sans-serif'],
+        lilita: ['"Lilita One"', 'cursive', 'sans-serif'],
+        fredoka: ['Fredoka', 'sans-serif'],
+        orbitron: ['Orbitron', 'sans-serif'],
+        rajdhani: ['Rajdhani', 'sans-serif'],
+        sans: ['"Lilita One"', 'Fredoka', 'Inter', 'system-ui', 'sans-serif'],
         mono: ['JetBrains Mono', 'monospace']
       },
       animation: {

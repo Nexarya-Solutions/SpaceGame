@@ -42,6 +42,18 @@ export class SoundManager {
     }
   }
 
+  public static pauseAudio(): void {
+    if (this.ctx && this.ctx.state === 'running') {
+      this.ctx.suspend().catch(() => {});
+    }
+  }
+
+  public static resumeAudio(): void {
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(() => {});
+    }
+  }
+
   public static setMuted(muted: boolean): void {
     if (this.masterGain && this.ctx) {
       const targetGain = muted ? 0 : 0.8;

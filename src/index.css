@@ -27,11 +27,37 @@
   }
 }
 
+@keyframes confettiFall {
+  0% {
+    transform: translateY(-20px) rotate(0deg);
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(105vh) rotate(720deg);
+    opacity: 0;
+  }
+}
+
+.animate-confetti-fall {
+  animation: confettiFall linear infinite;
+}
+
 .font-orbitron {
   font-family: 'Orbitron', monospace, sans-serif;
 }
 
 .font-rajdhani {
   font-family: 'Rajdhani', sans-serif;
+}
+
+.font-game, .font-lilita {
+  font-family: 'Lilita One', 'Fredoka', cursive, sans-serif;
+}
+
+.font-fredoka {
+  font-family: 'Fredoka', sans-serif;
 }
 

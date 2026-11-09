@@ -1,4 +1,5 @@
 export type GameState = 'MENU' | 'PLAYING' | 'GAMEOVER';
+export type GameMode = 'REGULAR' | 'DAILY_CHALLENGE';
 
 export interface ScoreData {
   score: number;
@@ -13,7 +14,15 @@ export interface GameOverData {
   highScore: number;
   orbitsCount: number;
   maxCombo: number;
-  reason: 'LOST_IN_SPACE' | 'HAZARD_COLLISION' | 'DEBRIS_COLLISION';
+  reason: 'LOST_IN_SPACE' | 'HAZARD_COLLISION' | 'DEBRIS_COLLISION' | 'TIME_EXPIRED';
+  mode: GameMode;
+  isNewHighScore: boolean;
+}
+
+export interface ChallengeTimerData {
+  remaining: number;
+  total: number;
+  bonusAdded?: number;
 }
 
 export interface MultiplierPowerupData {
@@ -85,6 +94,9 @@ export const GAME_EVENTS = {
   GAME_PAUSED: 'GAME_PAUSED',
   GAME_RESUMED: 'GAME_RESUMED',
   MULTIPLIER_POWERUP_UPDATE: 'MULTIPLIER_POWERUP_UPDATE',
-  WARP_SEQUENCE_UPDATE: 'WARP_SEQUENCE_UPDATE'
+  WARP_SEQUENCE_UPDATE: 'WARP_SEQUENCE_UPDATE',
+  CHALLENGE_TIMER_UPDATE: 'CHALLENGE_TIMER_UPDATE',
+  CHALLENGE_TIMER_BONUS: 'CHALLENGE_TIMER_BONUS',
+  MODE_CHANGE: 'MODE_CHANGE'
 } as const;
 

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import shivoroLogo from '../assets/shivoro-games-cropped.png';
 import { SoundManager } from '../game/audio/SoundManager';
-import { Sparkles } from 'lucide-react';
 
 interface ProductionSplashProps {
   onComplete: () => void;
@@ -107,24 +106,6 @@ export const ProductionSplash: React.FC<ProductionSplashProps> = ({ onComplete }
 
             {/* Shimmer Light Beam Sweep */}
             <div className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent animate-[shimmer_2.2s_infinite]" />
-          </div>
-
-          {/* Golden Sparkle Accents */}
-          <Sparkles className="absolute -top-2 -right-2 h-5 w-5 text-amber-300 drop-shadow-[0_0_8px_#fbbf24] animate-bounce" />
-          <Sparkles className="absolute -bottom-1 -left-2 h-4 w-4 text-amber-400/80 drop-shadow-[0_0_6px_#f59e0b]" />
-        </div>
-
-        {/* Company Title & Presentation Tagline */}
-        <div className="flex flex-col items-center gap-2">
-          <h1 className="font-orbitron text-xl sm:text-2xl font-black tracking-[0.3em] text-transparent bg-clip-text bg-gradient-to-r from-amber-100 via-amber-300 to-yellow-500 drop-shadow-[0_2px_14px_rgba(251,191,36,0.4)]">
-            SHIVORO GAMES
-          </h1>
-          <div className="flex items-center gap-2">
-            <span className="h-[1px] w-6 bg-gradient-to-r from-transparent to-amber-400/60" />
-            <span className="font-orbitron text-xs sm:text-sm font-bold tracking-[0.45em] text-slate-300 uppercase">
-              PRESENTS
-            </span>
-            <span className="h-[1px] w-6 bg-gradient-to-l from-transparent to-amber-400/60" />
           </div>
         </div>
       </div>

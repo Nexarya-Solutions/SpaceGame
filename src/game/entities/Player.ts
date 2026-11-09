@@ -105,6 +105,11 @@ export class Player {
     if (this.state !== 'LAUNCHED') return null;
 
     for (const planet of planets) {
+      // Repulsor nodes have inverse gravity; they repel rather than capture
+      if (planet.type === 'REPULSOR') {
+        continue;
+      }
+
       if (planet.id === this.lastCapturedPlanetId) {
         const distFromLast = Math.hypot(this.x - planet.x, this.y - planet.y);
         if (distFromLast < planet.captureRadius + 5) {
@@ -159,6 +164,17 @@ export class Player {
     }
 
     if (this.state === 'ORBITING' && this.currentPlanet) {
+      if (this.currentPlanet.isDestroyed) {
+        // Decaying planet vanished! Break orbit immediately into free drift
+        this.launch();
+        return;
+      }
+
+      // If planet is decaying, continually collapse orbit radius
+      if (this.currentPlanet.type === 'DECAYING') {
+        this.targetOrbitRadius = this.currentPlanet.orbitRadius;
+      }
+
       const lerpSpeed = 12 * dt;
       this.currentOrbitRadius += (this.targetOrbitRadius - this.currentOrbitRadius) * lerpSpeed;
 
@@ -278,6 +294,20 @@ export class Player {
     this.playerGraphics
       .circle(this.x - 2.1, this.y - 2.1, 0.9)
       .fill({ color: 0xffffff, alpha: 0.95 });
+  }
+
+  public reset(): void {
+    this.state = 'ORBITING';
+    this.currentPlanet = null;
+    this.lastCapturedPlanetId = -1;
+    this.vx = 0;
+    this.vy = 0;
+    this.isMultiplierActive = false;
+    this.isWarping = false;
+    this.trailPoints = [];
+    this.playerGraphics.visible = true;
+    this.trailGraphics.clear();
+    this.renderPlayer();
   }
 
   public kill(): void {

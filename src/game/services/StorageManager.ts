@@ -1,7 +1,9 @@
 import { Preferences } from '@capacitor/preferences';
+import { GameMode } from '../events/GameEvents';
 
 const KEYS = {
   HIGH_SCORE: 'endless_orbit_high_score',
+  CHALLENGE_HIGH_SCORE: 'endless_orbit_challenge_high_score',
   SOUND_ENABLED: 'endless_orbit_sound',
   HAPTICS_ENABLED: 'endless_orbit_haptics',
   TOTAL_GAMES: 'endless_orbit_total_games',
@@ -10,6 +12,7 @@ const KEYS = {
 
 export class StorageManager {
   private static highScoreCache: number = 0;
+  private static challengeHighScoreCache: number = 0;
   private static soundCache: boolean = true;
   private static hapticsCache: boolean = true;
   private static hasSeenIntroStoryCache: boolean = false;
@@ -20,6 +23,9 @@ export class StorageManager {
     try {
       const { value: hs } = await Preferences.get({ key: KEYS.HIGH_SCORE });
       this.highScoreCache = hs ? parseInt(hs, 10) || 0 : 0;
+
+      const { value: chs } = await Preferences.get({ key: KEYS.CHALLENGE_HIGH_SCORE });
+      this.challengeHighScoreCache = chs ? parseInt(chs, 10) || 0 : 0;
 
       const { value: snd } = await Preferences.get({ key: KEYS.SOUND_ENABLED });
       this.soundCache = snd !== null ? snd === 'true' : true;
@@ -39,6 +45,8 @@ export class StorageManager {
       try {
         const hs = localStorage.getItem(KEYS.HIGH_SCORE);
         this.highScoreCache = hs ? parseInt(hs, 10) || 0 : 0;
+        const chs = localStorage.getItem(KEYS.CHALLENGE_HIGH_SCORE);
+        this.challengeHighScoreCache = chs ? parseInt(chs, 10) || 0 : 0;
         const snd = localStorage.getItem(KEYS.SOUND_ENABLED);
         this.soundCache = snd !== null ? snd === 'true' : true;
         const hpt = localStorage.getItem(KEYS.HAPTICS_ENABLED);
@@ -70,18 +78,35 @@ export class StorageManager {
     }
   }
 
-  public static getHighScore(): number {
+  public static getHighScore(mode: GameMode = 'REGULAR'): number {
+    return mode === 'DAILY_CHALLENGE' ? this.challengeHighScoreCache : this.highScoreCache;
+  }
+
+  public static getRegularHighScore(): number {
     return this.highScoreCache;
   }
 
-  public static async setHighScore(score: number): Promise<boolean> {
-    if (score > this.highScoreCache) {
-      this.highScoreCache = score;
+  public static getChallengeHighScore(): number {
+    return this.challengeHighScoreCache;
+  }
+
+  public static async setHighScore(score: number, mode: GameMode = 'REGULAR'): Promise<boolean> {
+    const isChallenge = mode === 'DAILY_CHALLENGE';
+    const currentHigh = isChallenge ? this.challengeHighScoreCache : this.highScoreCache;
+    const key = isChallenge ? KEYS.CHALLENGE_HIGH_SCORE : KEYS.HIGH_SCORE;
+
+    if (score > currentHigh) {
+      if (isChallenge) {
+        this.challengeHighScoreCache = score;
+      } else {
+        this.highScoreCache = score;
+      }
+
       try {
-        await Preferences.set({ key: KEYS.HIGH_SCORE, value: score.toString() });
+        await Preferences.set({ key, value: score.toString() });
       } catch {
         try {
-          localStorage.setItem(KEYS.HIGH_SCORE, score.toString());
+          localStorage.setItem(key, score.toString());
         } catch {
           // ignore
         }

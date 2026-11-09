@@ -8,7 +8,7 @@ import { Pickup, PickupType } from './entities/Pickup';
 import { SoundManager } from './audio/SoundManager';
 import { HapticsManager } from './services/HapticsManager';
 import { StorageManager } from './services/StorageManager';
-import { gameEvents, GAME_EVENTS, GameState } from './events/GameEvents';
+import { gameEvents, GAME_EVENTS, GameState, GameMode } from './events/GameEvents';
 
 export class GameApp {
   public app: Application;
@@ -40,6 +40,7 @@ export class GameApp {
 
   // Game Progression & Scoring
   public gameState: GameState = 'MENU';
+  public currentMode: GameMode = 'REGULAR';
   public isPaused: boolean = false;
   private score: number = 0;
   private highScore: number = 0;
@@ -47,6 +48,10 @@ export class GameApp {
   private maxCombo: number = 0;
   private totalOrbitsCount: number = 0;
   private totalElapsedTime: number = 0;
+
+  // Daily Challenge Time-Attack Properties
+  public challengeTimeRemaining: number = 60.0;
+  public readonly CHALLENGE_MAX_TIME: number = 60.0;
 
   // Power-Up States (PIXI.Ticker delta time driven)
   public isMultiplierActive: boolean = false;
@@ -144,6 +149,14 @@ export class GameApp {
     gameEvents.emit(GAME_EVENTS.STATE_CHANGE, newState);
   }
 
+  public setGameMode(mode: GameMode): void {
+    this.currentMode = mode;
+    this.highScore = StorageManager.getHighScore(mode);
+    this.resetGameSession(mode);
+    this.setGameState('MENU');
+    gameEvents.emit(GAME_EVENTS.MODE_CHANGE, mode);
+  }
+
   public pause(): void {
     if (this.isPaused) return;
     this.isPaused = true;
@@ -152,6 +165,7 @@ export class GameApp {
     } catch {
       // ignore
     }
+    SoundManager.pauseAudio();
     gameEvents.emit(GAME_EVENTS.GAME_PAUSED);
   }
 
@@ -163,7 +177,29 @@ export class GameApp {
     } catch {
       // ignore
     }
+    SoundManager.resumeAudio();
     gameEvents.emit(GAME_EVENTS.GAME_RESUMED);
+  }
+
+  public startGame(options?: { mode?: GameMode }): void {
+    const targetMode = options?.mode || this.currentMode;
+    this.currentMode = targetMode;
+    this.highScore = StorageManager.getHighScore(targetMode);
+
+    this.resetGameSession(targetMode);
+
+    this.isPaused = false;
+    try {
+      if (this.app?.ticker && !this.app.ticker.started) {
+        this.app.ticker.start();
+      }
+    } catch {
+      // ignore
+    }
+    SoundManager.resume();
+    SoundManager.resumeAudio();
+
+    this.setGameState('PLAYING');
   }
 
   public handleInput(): void {
@@ -173,8 +209,7 @@ export class GameApp {
     SoundManager.resume();
 
     if (this.gameState === 'MENU') {
-      this.setGameState('PLAYING');
-      this.launchPlayer();
+      this.startGame({ mode: this.currentMode });
     } else if (this.gameState === 'PLAYING') {
       this.launchPlayer();
     }
@@ -191,46 +226,90 @@ export class GameApp {
     }
   }
 
-  public restartGame(): void {
-    if (this.isPaused) {
-      this.isPaused = false;
-      try {
+  public restartGame(options?: { mode?: GameMode }): void {
+    this.startGame(options);
+  }
+
+  public returnToMenu(): void {
+    this.resetGameSession(this.currentMode);
+    this.setGameState('MENU');
+  }
+
+  public endGame(): void {
+    if (this.score > this.highScore) {
+      this.highScore = this.score;
+    }
+    if (this.score > 0) {
+      StorageManager.setHighScore(this.score, this.currentMode);
+    }
+
+    this.returnToMenu();
+  }
+
+  public resetGameSession(mode?: GameMode): void {
+    if (mode) {
+      this.currentMode = mode;
+      this.highScore = StorageManager.getHighScore(mode);
+    }
+
+    // 1. Reset all status & lock flags
+    this.isPaused = false;
+    this.isWarpActive = false;
+    this.warpHopCount = 0;
+    this.isMultiplierActive = false;
+    this.multiplierRemaining = 0;
+    this.screenShakeMagnitude = 0;
+
+    // 2. Ensure ticker is running
+    try {
+      if (this.app?.ticker && !this.app.ticker.started) {
         this.app.ticker.start();
+      }
+    } catch {
+      // ignore
+    }
+
+    // 3. Clear all active entities & containers
+    for (const p of this.planets) {
+      try {
+        p.destroy();
       } catch {
         // ignore
       }
     }
-    this.resetWorld();
-    this.setGameState('PLAYING');
-  }
-
-  private resetWorld(): void {
-    // 1. Clear existing planets
-    for (const p of this.planets) {
-      p.destroy();
-    }
     this.planets = [];
     this.planetLayer.removeChildren();
 
-    // 2. Clear existing asteroids
     for (const a of this.asteroids) {
-      a.destroy();
+      try {
+        a.destroy();
+      } catch {
+        // ignore
+      }
     }
     this.asteroids = [];
     this.asteroidLayer.removeChildren();
 
-    // 3. Clear existing pickups
     for (const pk of this.pickups) {
-      pk.destroy();
+      try {
+        pk.destroy();
+      } catch {
+        // ignore
+      }
     }
     this.pickups = [];
     this.pickupLayer.removeChildren();
 
-    // 4. Clear particles
     this.particleManager.clear();
+
+    // 4. Reset comet player
+    this.player.reset();
+    this.cameraY = 0;
+    this.targetCameraY = 0;
 
     // 5. Reset scores and timers
     this.score = 0;
+    this.highScore = StorageManager.getHighScore(this.currentMode);
     this.combo = 0;
     this.maxCombo = 0;
     this.totalOrbitsCount = 0;
@@ -238,9 +317,16 @@ export class GameApp {
     this.nextPickupId = 0;
     this.totalElapsedTime = 0;
 
+    // Reset challenge countdown timer
+    this.challengeTimeRemaining = this.CHALLENGE_MAX_TIME;
+    if (this.currentMode === 'DAILY_CHALLENGE') {
+      gameEvents.emit(GAME_EVENTS.CHALLENGE_TIMER_UPDATE, {
+        remaining: this.challengeTimeRemaining,
+        total: this.CHALLENGE_MAX_TIME
+      });
+    }
+
     // Reset power-ups
-    this.isMultiplierActive = false;
-    this.multiplierRemaining = 0;
     this.player.isMultiplierActive = false;
     gameEvents.emit(GAME_EVENTS.MULTIPLIER_POWERUP_UPDATE, {
       active: false,
@@ -249,8 +335,6 @@ export class GameApp {
     });
 
     // Reset warp
-    this.isWarpActive = false;
-    this.warpHopCount = 0;
     this.player.isWarping = false;
     this.warpTargetPlanet = null;
     this.warpTargetList = [];
@@ -293,8 +377,12 @@ export class GameApp {
     // Generate upcoming starting sequence (3-4 planets ahead)
     this.generatePlanetsAhead();
 
-    // Notify UI
+    // 7. Notify UI
     this.emitScoreUpdate(false);
+  }
+
+  private resetWorld(): void {
+    this.resetGameSession();
   }
 
   private generatePlanetsAhead(): void {
@@ -311,41 +399,71 @@ export class GameApp {
       let type: PlanetType = 'NORMAL';
       let hasHazardMoon = false;
 
-      if (id <= 6) {
-        // EARLY GAME (Score 0-10): Closer together, wide clear angles, generous capture
-        gapY = 195 + Math.random() * 35;
-        captureRadiusBuffer = 36;
-      } else if (id <= 20) {
-        // MID GAME (Score 10-30): Varied spacing, moving/pulsing celestial bodies
-        gapY = 210 + Math.random() * 45;
-        captureRadiusBuffer = 28;
+      if (this.currentMode === 'DAILY_CHALLENGE') {
+        // Daily Challenge Mode: High-intensity, time-attack variant featuring advanced celestial hazards & dynamic mechanics
+        gapY = 190 + Math.random() * 45;
+        captureRadiusBuffer = 26;
 
-        const roll = Math.random();
-        if (roll < 0.35) {
-          type = 'MOVING';
-        } else if (roll < 0.55) {
-          type = 'PULSING';
-        } else if (roll < 0.72) {
-          type = 'BOOST';
+        if (id <= 2) {
+          type = 'NORMAL';
+        } else {
+          const roll = Math.random();
+          if (roll < 0.28) {
+            type = 'DECAYING'; // Shrinking / collapsing planet
+          } else if (roll < 0.50) {
+            type = 'VERTICAL'; // Oscillates vertically
+          } else if (roll < 0.68) {
+            type = 'MOVING'; // Oscillates horizontally
+          } else if (roll < 0.82) {
+            type = 'BOOST';
+          } else if (roll < 0.92) {
+            type = 'HAZARD';
+          } else {
+            type = 'PULSING';
+          }
+        }
+
+        if (type !== 'HAZARD' && Math.random() < 0.28) {
+          hasHazardMoon = true;
         }
       } else {
-        // LATE GAME (Score 30+): Deliberate timing, hazard stars, orbiting satellites
-        gapY = 220 + Math.random() * 55;
-        captureRadiusBuffer = 24;
+        // Regular Mode (Standard progression)
+        if (id <= 6) {
+          // EARLY GAME (Score 0-10): Closer together, wide clear angles, generous capture
+          gapY = 195 + Math.random() * 35;
+          captureRadiusBuffer = 36;
+        } else if (id <= 20) {
+          // MID GAME (Score 10-30): Varied spacing, moving/pulsing celestial bodies
+          gapY = 210 + Math.random() * 45;
+          captureRadiusBuffer = 28;
 
-        const roll = Math.random();
-        if (roll < 0.2) {
-          type = 'HAZARD';
-        } else if (roll < 0.5) {
-          type = 'MOVING';
-        } else if (roll < 0.7) {
-          type = 'PULSING';
-        } else if (roll < 0.85) {
-          type = 'BOOST';
-        }
+          const roll = Math.random();
+          if (roll < 0.35) {
+            type = 'MOVING';
+          } else if (roll < 0.55) {
+            type = 'PULSING';
+          } else if (roll < 0.72) {
+            type = 'BOOST';
+          }
+        } else {
+          // LATE GAME (Score 30+): Deliberate timing, hazard stars, orbiting satellites
+          gapY = 220 + Math.random() * 55;
+          captureRadiusBuffer = 24;
 
-        if (type !== 'HAZARD' && Math.random() < 0.3) {
-          hasHazardMoon = true;
+          const roll = Math.random();
+          if (roll < 0.2) {
+            type = 'HAZARD';
+          } else if (roll < 0.5) {
+            type = 'MOVING';
+          } else if (roll < 0.7) {
+            type = 'PULSING';
+          } else if (roll < 0.85) {
+            type = 'BOOST';
+          }
+
+          if (type !== 'HAZARD' && Math.random() < 0.3) {
+            hasHazardMoon = true;
+          }
         }
       }
 
@@ -381,6 +499,9 @@ export class GameApp {
         type,
         moveSpeed: 1.2 + Math.random() * 1.3,
         moveRange: 55 + Math.random() * 35,
+        verticalSpeed: 1.5 + Math.random() * 1.0,
+        verticalRange: 38 + Math.random() * 15,
+        decayRate: 6.5,
         hasHazardMoon,
         hazardMoonSpeed: (Math.random() > 0.5 ? 1 : -1) * (1.8 + Math.random() * 1.0),
         hazardMoonDistance: orbitRadius + 22
@@ -389,6 +510,24 @@ export class GameApp {
       this.planets.push(newPlanet);
       this.planetLayer.addChild(newPlanet.container);
       this.highestPlanetY = newY;
+
+      // In Daily Challenge: Spawn Anti-Gravity Repulsor Nodes in dead zones
+      if (this.currentMode === 'DAILY_CHALLENGE' && id > 3 && Math.random() < 0.28 && type !== 'HAZARD') {
+        const repulsorX = newX < screenWidth * 0.5 ? screenWidth - 80 : 80;
+        const repulsorY = newY + gapY * 0.5;
+        const repulsorNode = new Planet({
+          id: this.nextPlanetId++,
+          x: repulsorX,
+          y: repulsorY,
+          radius: 20,
+          orbitRadius: 42,
+          captureRadius: 82,
+          type: 'REPULSOR',
+          repulsorStrength: 1800
+        });
+        this.planets.push(repulsorNode);
+        this.planetLayer.addChild(repulsorNode.container);
+      }
 
       // SPAWN POWER-UPS (Magnet & Chain Warp) - Mid & Late Game
       if (id > 5) {
@@ -500,6 +639,25 @@ export class GameApp {
     const dt = Math.min(0.05, (ticker.deltaTime / 60));
     this.totalElapsedTime += dt;
 
+    // 0. Update Daily Challenge Countdown Timer (Ticker-driven)
+    if (this.currentMode === 'DAILY_CHALLENGE' && this.gameState === 'PLAYING') {
+      this.challengeTimeRemaining -= dt;
+      if (this.challengeTimeRemaining <= 0) {
+        this.challengeTimeRemaining = 0;
+        gameEvents.emit(GAME_EVENTS.CHALLENGE_TIMER_UPDATE, {
+          remaining: 0,
+          total: this.CHALLENGE_MAX_TIME
+        });
+        this.triggerGameOver('TIME_EXPIRED');
+        return;
+      } else {
+        gameEvents.emit(GAME_EVENTS.CHALLENGE_TIMER_UPDATE, {
+          remaining: this.challengeTimeRemaining,
+          total: this.CHALLENGE_MAX_TIME
+        });
+      }
+    }
+
     // 1. Update Multiplier Power-Up Timer (Ticker-driven)
     if (this.isMultiplierActive) {
       this.multiplierRemaining -= dt;
@@ -551,6 +709,26 @@ export class GameApp {
 
     // 7. Check Collisions & Capture
     if (!this.isWarpActive && this.player.state === 'LAUNCHED') {
+      // Repulsor Nodes (Anti-Gravity inverse slingshot)
+      for (const planet of this.planets) {
+        if (planet.type === 'REPULSOR') {
+          const dx = this.player.x - planet.x;
+          const dy = this.player.y - planet.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist > 0 && dist < planet.captureRadius) {
+            const factor = 1 - dist / planet.captureRadius;
+            const force = (planet.repulsorStrength || 1800) * factor * dt;
+            const normX = dx / dist;
+            const normY = dy / dist;
+            this.player.vx += normX * force;
+            this.player.vy += normY * force;
+            if (Math.random() < 0.45) {
+              this.particleManager.emitTrail(this.player.x, this.player.y, 0xd946ef, 1.4);
+            }
+          }
+        }
+      }
+
       // A. Check Planet Capture
       const capture = this.player.checkCapture(this.planets);
       if (capture) {
@@ -612,6 +790,17 @@ export class GameApp {
 
   private handlePickupCollection(pickup: Pickup): void {
     pickup.isCollected = true;
+
+    // Daily Challenge timer bonus
+    if (this.currentMode === 'DAILY_CHALLENGE') {
+      const bonus = 3.0;
+      this.challengeTimeRemaining = Math.min(this.CHALLENGE_MAX_TIME, this.challengeTimeRemaining + bonus);
+      gameEvents.emit(GAME_EVENTS.CHALLENGE_TIMER_BONUS, {
+        remaining: this.challengeTimeRemaining,
+        total: this.CHALLENGE_MAX_TIME,
+        bonusAdded: bonus
+      });
+    }
 
     if (pickup.type === 'MULTIPLIER') {
       // 2x Score for 10 seconds
@@ -720,7 +909,7 @@ export class GameApp {
 
         if (this.score > this.highScore) {
           this.highScore = this.score;
-          StorageManager.setHighScore(this.highScore);
+          StorageManager.setHighScore(this.highScore, this.currentMode);
         }
 
         // Audio, Haptics & Particle burst on hop
@@ -806,6 +995,17 @@ export class GameApp {
       HapticsManager.captureImpact();
     }
 
+    // Daily Challenge timer bonus (+2.5s or +3s on perfect)
+    if (this.currentMode === 'DAILY_CHALLENGE') {
+      const bonus = isPerfect ? 3.0 : 2.5;
+      this.challengeTimeRemaining = Math.min(this.CHALLENGE_MAX_TIME, this.challengeTimeRemaining + bonus);
+      gameEvents.emit(GAME_EVENTS.CHALLENGE_TIMER_BONUS, {
+        remaining: this.challengeTimeRemaining,
+        total: this.CHALLENGE_MAX_TIME,
+        bonusAdded: bonus
+      });
+    }
+
     // Apply active 2x Power-Up Multiplier if active
     const powerupFactor = this.isMultiplierActive ? 2 : 1;
     const earnedScore = basePoints * multiplier * powerupFactor;
@@ -813,7 +1013,7 @@ export class GameApp {
 
     if (this.score > this.highScore) {
       this.highScore = this.score;
-      StorageManager.setHighScore(this.highScore);
+      StorageManager.setHighScore(this.highScore, this.currentMode);
     }
 
     // Visual burst effect
@@ -836,7 +1036,7 @@ export class GameApp {
     });
   }
 
-  private triggerGameOver(reason: 'LOST_IN_SPACE' | 'HAZARD_COLLISION' | 'DEBRIS_COLLISION'): void {
+  private triggerGameOver(reason: 'LOST_IN_SPACE' | 'HAZARD_COLLISION' | 'DEBRIS_COLLISION' | 'TIME_EXPIRED'): void {
     if (this.gameState === 'GAMEOVER') return;
     this.isPaused = false;
     this.isWarpActive = false;
@@ -856,19 +1056,30 @@ export class GameApp {
     this.screenShakeTime = 0.45;
     this.screenShakeMagnitude = 18;
 
-    // Check high score
-    if (this.score > this.highScore) {
+    // Check high score and persist with mode
+    const previousHigh = this.highScore;
+    const isNewHighScore = this.score > previousHigh && this.score > 0;
+    if (isNewHighScore) {
       this.highScore = this.score;
-      StorageManager.setHighScore(this.highScore);
     }
+    StorageManager.setHighScore(this.score, this.currentMode);
+
+    // Pause the engine after crash explosion settles so canvas freezes in its final frame
+    setTimeout(() => {
+      if (this.gameState === 'GAMEOVER') {
+        this.pause();
+      }
+    }, 500);
 
     // Emit Game Over Event
     gameEvents.emit(GAME_EVENTS.GAME_OVER, {
       score: this.score,
-      highScore: this.highScore,
+      highScore: Math.max(this.score, previousHigh),
       orbitsCount: this.totalOrbitsCount,
       maxCombo: this.maxCombo,
-      reason
+      reason,
+      mode: this.currentMode,
+      isNewHighScore
     });
   }
 
