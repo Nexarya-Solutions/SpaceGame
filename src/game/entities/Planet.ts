@@ -12,6 +12,7 @@ export type PlanetType =
 
 export interface PlanetConfig {
   id: number;
+  orbitIndex?: number;
   x: number;
   y: number;
   radius: number;
@@ -31,6 +32,7 @@ export interface PlanetConfig {
 
 export class Planet {
   public id: number;
+  public orbitIndex: number;
   public container: Container;
   public startX: number;
   public startY: number;
@@ -81,6 +83,7 @@ export class Planet {
 
   constructor(config: PlanetConfig) {
     this.id = config.id;
+    this.orbitIndex = config.orbitIndex ?? config.id;
     this.startX = config.x;
     this.startY = config.y;
     this.x = config.x;

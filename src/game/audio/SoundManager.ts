@@ -62,6 +62,32 @@ export class SoundManager {
     }
   }
 
+  public static playClick(): void {
+    if (!StorageManager.isSoundEnabled() || !this.ctx || !this.masterGain) return;
+    this.resume();
+
+    try {
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(320, now);
+      osc.frequency.exponentialRampToValueAtTime(160, now + 0.05);
+
+      gain.gain.setValueAtTime(0.15, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+
+      osc.connect(gain);
+      gain.connect(this.masterGain);
+
+      osc.start(now);
+      osc.stop(now + 0.07);
+    } catch {
+      // Audio fallback
+    }
+  }
+
   public static playLaunch(): void {
     if (!StorageManager.isSoundEnabled() || !this.ctx || !this.masterGain) return;
     this.resume();

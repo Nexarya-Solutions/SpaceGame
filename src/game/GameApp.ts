@@ -49,6 +49,13 @@ export class GameApp {
   private totalOrbitsCount: number = 0;
   private totalElapsedTime: number = 0;
 
+  // Orbit Progression & Anti-Backtrack Scoring
+  private nextOrbitIndex: number = 0;
+  private highestOrbitIndexReached: number = 0;
+  private visitedOrbitIds: Set<number> = new Set<number>();
+  private initialPlanetY: number = 0;
+  private currentAnchorY: number = 0;
+
   // Daily Challenge Time-Attack Properties
   public challengeTimeRemaining: number = 60.0;
   public readonly CHALLENGE_MAX_TIME: number = 60.0;
@@ -347,9 +354,15 @@ export class GameApp {
     const screenWidth = this.app.screen.width;
     const screenHeight = this.app.screen.height;
 
+    // Reset orbit progression & anti-backtrack tracking
+    this.nextOrbitIndex = 0;
+    this.highestOrbitIndexReached = 0;
+    this.visitedOrbitIds.clear();
+
     // 6. Initial anchor planet at center
     const initialPlanet = new Planet({
       id: this.nextPlanetId++,
+      orbitIndex: this.nextOrbitIndex++, // Initial orbit is index 0
       x: screenWidth * 0.5,
       y: screenHeight * 0.5,
       radius: 32,
@@ -359,6 +372,7 @@ export class GameApp {
     });
     initialPlanet.isVisited = true;
     initialPlanet.isCurrent = true;
+    this.visitedOrbitIds.add(initialPlanet.id);
 
     this.planets.push(initialPlanet);
     this.planetLayer.addChild(initialPlanet.container);
@@ -366,8 +380,10 @@ export class GameApp {
     // Initial player state locked into first planet
     this.player.initOnPlanet(initialPlanet);
 
-    // Highest planet tracking
+    // Highest planet tracking & reference anchors
     this.highestPlanetY = initialPlanet.y;
+    this.initialPlanetY = initialPlanet.y;
+    this.currentAnchorY = initialPlanet.y;
 
     // Camera initial position centered on initial planet
     this.cameraY = initialPlanet.y - screenHeight * 0.5;
@@ -488,9 +504,10 @@ export class GameApp {
       const orbitRadius = radius + 32 + Math.random() * 8;
       const captureRadius = orbitRadius + captureRadiusBuffer;
 
-      // Create and store planet
+      // Create and store planet with consecutive orbitIndex
       const newPlanet = new Planet({
         id,
+        orbitIndex: this.nextOrbitIndex++,
         x: newX,
         y: newY,
         radius,
@@ -517,6 +534,7 @@ export class GameApp {
         const repulsorY = newY + gapY * 0.5;
         const repulsorNode = new Planet({
           id: this.nextPlanetId++,
+          orbitIndex: -1, // Non-capturable hazard node
           x: repulsorX,
           y: repulsorY,
           radius: 20,
@@ -735,7 +753,7 @@ export class GameApp {
         if (capture.planet.type === 'HAZARD') {
           this.triggerGameOver('HAZARD_COLLISION');
         } else {
-          this.handleSuccessfulCapture(capture.planet, capture.distance, capture.isPerfect);
+          this.onEnterOrbit(capture.planet, capture.distance, capture.isPerfect);
         }
       }
 
@@ -756,15 +774,38 @@ export class GameApp {
         }
       }
 
-      // D. Check Out-of-Bounds Fail
+      // D. Check Out-of-Bounds & Fall / Death Boundaries
       const screenWidth = this.app.screen.width;
       const screenHeight = this.app.screen.height;
+
+      // 1. Screen boundaries
       const outOfBoundsLeft = this.player.x < -60;
       const outOfBoundsRight = this.player.x > screenWidth + 60;
-      const outOfBoundsBottom = this.player.y > this.cameraY + screenHeight + 60;
       const outOfBoundsTop = this.player.y < this.cameraY - 450;
+      // Tightened bottom threshold so falling off the visible screen triggers immediate game over
+      const outOfBoundsBottom = this.player.y > this.cameraY + screenHeight + 20;
 
-      if (outOfBoundsLeft || outOfBoundsRight || outOfBoundsBottom || outOfBoundsTop) {
+      // 2. Initial Orbit Downward Launch / Fall Check:
+      // When the comet launches from the initial orbit downward into empty space
+      // (below the first orbit's capture zone with downward velocity), trigger game over immediately.
+      const belowInitialOrbit =
+        this.highestOrbitIndexReached === 0 &&
+        this.player.vy > 0 &&
+        this.player.y > this.initialPlanetY + 115;
+
+      // 3. Lowest Orbit Void Check:
+      // If the player falls below the lowest active orbit moving downward, there are no valid orbits below;
+      // trigger game over immediately rather than floating downward infinitely.
+      let lowestPlanetY = this.initialPlanetY;
+      for (let i = 0; i < this.planets.length; i++) {
+        const p = this.planets[i];
+        if (p.type !== 'REPULSOR' && p.y > lowestPlanetY) {
+          lowestPlanetY = p.y;
+        }
+      }
+      const belowLowestOrbit = this.player.vy > 0 && this.player.y > lowestPlanetY + 125;
+
+      if (outOfBoundsLeft || outOfBoundsRight || outOfBoundsBottom || outOfBoundsTop || belowInitialOrbit || belowLowestOrbit) {
         this.triggerGameOver('LOST_IN_SPACE');
       }
     } else if (!this.isWarpActive && this.player.state === 'ORBITING' && this.player.currentPlanet) {
@@ -901,6 +942,11 @@ export class GameApp {
         this.warpOrbitTimer = 0.28; // ~0.28s quick rotation
         this.warpHopCount++;
 
+        // Track warp target orbit in progression
+        this.visitedOrbitIds.add(this.warpTargetPlanet.id);
+        this.highestOrbitIndexReached = Math.max(this.highestOrbitIndexReached, this.warpTargetPlanet.orbitIndex);
+        this.currentAnchorY = this.warpTargetPlanet.y;
+
         // Bonus score for this warp hop (scaled to 10-point base factor)
         const scoreMult = this.isMultiplierActive ? 2 : 1;
         const hopBonus = 35 * scoreMult;
@@ -961,66 +1007,99 @@ export class GameApp {
     });
   }
 
-  private handleSuccessfulCapture(planet: Planet, distance: number, isPerfect: boolean): void {
+  /**
+   * Called when the comet enters an orbit (captures a planet).
+   * Implements anti-backtrack scoring:
+   * - Only awards points, combo, and bonuses when entering a NEW, higher orbit (orbitIndex > highestOrbitIndexReached).
+   * - If player backtracks/swings into an already visited or lower orbit, snaps to orbit and stays in play,
+   *   but awards 0 score and does not increment combo (prevents infinite score farming).
+   */
+  public onEnterOrbit(planet: Planet, distance: number = 0, isPerfect: boolean = false): void {
+    // 1. Calculate entry angle & rotational direction (CW or CCW)
     const dx = this.player.x - planet.x;
     const dy = this.player.y - planet.y;
     const cross = dx * this.player.vy - dy * this.player.vx;
     const dir: 1 | -1 = cross >= 0 ? 1 : -1;
 
-    // Snap to orbit
+    // 2. Snap to orbit and anchor camera
     this.player.snapToPlanet(planet, distance, dir);
+    this.currentAnchorY = planet.y;
 
-    // Combo streak management
-    this.combo++;
-    this.totalOrbitsCount++;
-    if (this.combo > this.maxCombo) {
-      this.maxCombo = this.combo;
-    }
+    // 3. Anti-Backtrack Scoring: Check if this orbit is a NEW, higher orbit
+    const isNewOrbit = !this.visitedOrbitIds.has(planet.id);
+    const isHigherOrbit = planet.orbitIndex > this.highestOrbitIndexReached;
+    const isFirstTimeHigherOrbit = isNewOrbit && isHigherOrbit;
 
-    const multiplier = Math.min(10, 1 + Math.floor(this.combo / 2));
-    let basePoints = 10;
+    if (isFirstTimeHigherOrbit) {
+      // Mark as visited and advance highest orbit index reached
+      this.visitedOrbitIds.add(planet.id);
+      this.highestOrbitIndexReached = planet.orbitIndex;
 
-    if (planet.type === 'BOOST') {
-      basePoints += 5;
-      SoundManager.playBonus();
-    }
+      // Combo streak progression
+      this.combo++;
+      this.totalOrbitsCount++;
+      if (this.combo > this.maxCombo) {
+        this.maxCombo = this.combo;
+      }
 
-    if (isPerfect) {
-      basePoints += 15;
-      SoundManager.playPerfect();
-      HapticsManager.perfectImpact();
-      gameEvents.emit(GAME_EVENTS.PERFECT_CAPTURE, { planet, combo: this.combo });
+      const multiplier = Math.min(10, 1 + Math.floor(this.combo / 2));
+      let basePoints = 10;
+
+      if (planet.type === 'BOOST') {
+        basePoints += 5;
+        SoundManager.playBonus();
+      }
+
+      if (isPerfect) {
+        basePoints += 15;
+        SoundManager.playPerfect();
+        HapticsManager.perfectImpact();
+        gameEvents.emit(GAME_EVENTS.PERFECT_CAPTURE, { planet, combo: this.combo });
+      } else {
+        SoundManager.playCapture(this.combo);
+        HapticsManager.captureImpact();
+      }
+
+      // Daily Challenge timer bonus (+2.5s or +3s on perfect)
+      if (this.currentMode === 'DAILY_CHALLENGE') {
+        const bonus = isPerfect ? 3.0 : 2.5;
+        this.challengeTimeRemaining = Math.min(this.CHALLENGE_MAX_TIME, this.challengeTimeRemaining + bonus);
+        gameEvents.emit(GAME_EVENTS.CHALLENGE_TIMER_BONUS, {
+          remaining: this.challengeTimeRemaining,
+          total: this.CHALLENGE_MAX_TIME,
+          bonusAdded: bonus
+        });
+      }
+
+      // Apply active 2x Power-Up Multiplier if active
+      const powerupFactor = this.isMultiplierActive ? 2 : 1;
+      const earnedScore = basePoints * multiplier * powerupFactor;
+      this.score += earnedScore;
+
+      if (this.score > this.highScore) {
+        this.highScore = this.score;
+        StorageManager.setHighScore(this.highScore, this.currentMode);
+      }
+
+      // Visual burst effect
+      this.particleManager.emitCaptureBurst(this.player.x, this.player.y, planet.getColor(), isPerfect ? 36 : 22);
+
+      // Notify UI
+      this.emitScoreUpdate(isPerfect);
     } else {
-      SoundManager.playCapture(this.combo);
-      HapticsManager.captureImpact();
+      // Re-visiting an already visited or lower orbit:
+      // Player stays in play smoothly, but awards NO score and NO combo increase (anti-farming)
+      SoundManager.playClick();
+      HapticsManager.softTap();
+
+      // Subtle feedback without points
+      this.particleManager.emitCaptureBurst(this.player.x, this.player.y, 0x94a3b8, 12);
+      this.emitScoreUpdate(false);
     }
+  }
 
-    // Daily Challenge timer bonus (+2.5s or +3s on perfect)
-    if (this.currentMode === 'DAILY_CHALLENGE') {
-      const bonus = isPerfect ? 3.0 : 2.5;
-      this.challengeTimeRemaining = Math.min(this.CHALLENGE_MAX_TIME, this.challengeTimeRemaining + bonus);
-      gameEvents.emit(GAME_EVENTS.CHALLENGE_TIMER_BONUS, {
-        remaining: this.challengeTimeRemaining,
-        total: this.CHALLENGE_MAX_TIME,
-        bonusAdded: bonus
-      });
-    }
-
-    // Apply active 2x Power-Up Multiplier if active
-    const powerupFactor = this.isMultiplierActive ? 2 : 1;
-    const earnedScore = basePoints * multiplier * powerupFactor;
-    this.score += earnedScore;
-
-    if (this.score > this.highScore) {
-      this.highScore = this.score;
-      StorageManager.setHighScore(this.highScore, this.currentMode);
-    }
-
-    // Visual burst effect
-    this.particleManager.emitCaptureBurst(this.player.x, this.player.y, planet.getColor(), isPerfect ? 36 : 22);
-
-    // Notify UI
-    this.emitScoreUpdate(isPerfect);
+  private handleSuccessfulCapture(planet: Planet, distance: number, isPerfect: boolean): void {
+    this.onEnterOrbit(planet, distance, isPerfect);
   }
 
   private emitScoreUpdate(isPerfect: boolean): void {
@@ -1086,9 +1165,15 @@ export class GameApp {
   private updateCamera(dt: number): void {
     const screenHeight = this.app.screen.height;
 
-    let focusY = this.player.y;
+    let focusY: number;
     if (this.player.state === 'ORBITING' && this.player.currentPlanet) {
       focusY = this.player.currentPlanet.y;
+      this.currentAnchorY = this.player.currentPlanet.y;
+    } else {
+      // In flight: Camera only tracks upward progress (decreasing Y).
+      // If the player drops downward below the anchor orbit, the camera stays locked
+      // at currentAnchorY so the comet falls off the screen and triggers death.
+      focusY = Math.min(this.currentAnchorY, this.player.y);
     }
 
     // Keep active planet/player at ~50% in MENU, ~65% in PLAYING

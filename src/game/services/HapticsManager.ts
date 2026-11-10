@@ -35,6 +35,17 @@ export class HapticsManager {
     }
   }
 
+  public static async softTap(): Promise<void> {
+    if (!StorageManager.isHapticsEnabled()) return;
+    try {
+      await Haptics.impact({ style: ImpactStyle.Light });
+    } catch {
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        navigator.vibrate(10);
+      }
+    }
+  }
+
   public static async pickupImpact(): Promise<void> {
     if (!StorageManager.isHapticsEnabled()) return;
     try {
